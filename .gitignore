@@ -1,0 +1,26 @@
+# Rust
+target/
+Cargo.lock
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Build artifacts
+tensorrt_core/build/
+*.so
+*.so.*
+
+# Test outputs
+output_result.jpg
+*.jpg
+*.png
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log

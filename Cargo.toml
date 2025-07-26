@@ -1,0 +1,27 @@
+[package]
+name = "yolo11s-tensorrt-rs"
+version = "0.1.0"
+edition = "2021"
+authors = ["AI Assistant"]
+description = "Rust bindings for YOLO11s segmentation inference with TensorRT"
+license = "MIT"
+repository = "https://github.com/your-username/yolo11s-tensorrt-rs"
+keywords = ["yolo", "tensorrt", "inference", "segmentation", "rust", "cuda"]
+categories = ["api-bindings", "multimedia::images"]
+
+[dependencies]
+image = "0.25"
+imageproc = "0.24"
+ndarray = "0.15"
+rayon = "1.8"
+
+[build-dependencies]
+cc = "1.0"
+
+[lib]
+name = "yolo11s_tensorrt_rs"
+crate-type = ["cdylib", "rlib"]
+
+[[example]]
+name = "basic_usage"
+path = "examples/basic_usage.rs"
