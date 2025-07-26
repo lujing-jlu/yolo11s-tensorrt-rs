@@ -106,21 +106,51 @@ fn main() -> Result<(), String> {
 
 ## 🧪 运行示例
 
+### 重要：设置动态库路径
+
+在运行示例之前，需要设置 `LD_LIBRARY_PATH` 以加载 TensorRT 核心库：
+
+```bash
+# 设置动态库路径
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$(pwd)/tensorrt_core/build
+
+# 或者一行命令运行
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$(pwd)/tensorrt_core/build && cargo run --bin test
+```
+
 ### 运行基本示例
 
 ```bash
-cargo run --example basic_usage
+# 设置库路径并运行示例
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$(pwd)/tensorrt_core/build && cargo run --example basic_usage
 ```
 
 ### 运行测试
 
 ```bash
-cargo run --bin test
+# 设置库路径并运行测试
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$(pwd)/tensorrt_core/build && cargo run --bin test
 ```
 
 确保你有以下文件：
 - TensorRT 引擎文件: `models/yolo11s-seg.engine`
 - 测试图片: `images/test.jpg`
+
+### 故障排除
+
+如果遇到 `libtensorrt_core.so.1: cannot open shared object file` 错误：
+
+1. 确认 `tensorrt_core/build/` 目录存在
+2. 确认 `libtensorrt_core.so.1` 文件存在
+3. 正确设置 `LD_LIBRARY_PATH`
+
+```bash
+# 检查库文件是否存在
+ls -la tensorrt_core/build/libtensorrt_core.so*
+
+# 重新编译（如果需要）
+cargo clean && cargo build
+```
 
 ## 🏗️ 项目结构
 
@@ -205,7 +235,7 @@ pub struct YoloDetection {
 ## 📊 性能
 
 在 NVIDIA Jetson Nano 上的测试结果：
-- **推理时间**: ~260ms (640x640 输入)
+- **推理时间**: ~130ms (640x640 输入)
 - **内存使用**: ~200MB
 - **支持格式**: JPEG, PNG, BMP
 
