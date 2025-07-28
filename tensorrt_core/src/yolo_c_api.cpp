@@ -130,14 +130,24 @@ bool yolo_inference_fast(YoloInferenceHandle handle, const char* image_path, Yol
     try {
         auto* inference = static_cast<YoloInference*>(handle);
 
-        // 读取图片
+        // 读取图片时间测量
+        auto image_read_start = std::chrono::high_resolution_clock::now();
         cv::Mat img = cv::imread(image_path);
         if (img.empty()) {
             set_error("Failed to read image: " + std::string(image_path));
             return false;
         }
+        auto image_read_end = std::chrono::high_resolution_clock::now();
+        auto image_read_duration = std::chrono::duration_cast<std::chrono::microseconds>(image_read_end - image_read_start);
 
-        return yolo_inference_from_memory_fast(handle, img.data, img.cols, img.rows, img.channels(), result, skip_mask_copy);
+        bool success = yolo_inference_from_memory_fast(handle, img.data, img.cols, img.rows, img.channels(), result, skip_mask_copy);
+        
+        if (success) {
+            // 更新图片读取时间（在yolo_inference_from_memory_fast之后）
+            result->image_read_time_ms = image_read_duration.count() / 1000.0;
+        }
+        
+        return success;
 
     } catch (const std::exception& e) {
         set_error("Exception in yolo_inference_fast: " + std::string(e.what()));
@@ -169,13 +179,19 @@ bool yolo_inference_from_memory_fast(YoloInferenceHandle handle,
         cv::Mat img(height, width, channels == 3 ? CV_8UC3 : CV_8UC1, (void*)image_data);
         std::vector<cv::Mat> img_batch = {img};
         
-        auto start_time = std::chrono::high_resolution_clock::now();
+        auto total_start_time = std::chrono::high_resolution_clock::now();
         
-        // 预处理
+        // 预处理时间测量
+        auto preprocess_start = std::chrono::high_resolution_clock::now();
         cuda_batch_preprocess(img_batch, inference->device_buffers[0], kInputW, kInputH, inference->stream);
+        auto preprocess_end = std::chrono::high_resolution_clock::now();
+        auto preprocess_duration = std::chrono::duration_cast<std::chrono::microseconds>(preprocess_end - preprocess_start);
         
-        // 推理
+        // TensorRT推理时间测量
+        auto tensorrt_start = std::chrono::high_resolution_clock::now();
         inference->context->enqueueV3(inference->stream);
+        auto tensorrt_end = std::chrono::high_resolution_clock::now();
+        auto tensorrt_duration = std::chrono::duration_cast<std::chrono::microseconds>(tensorrt_end - tensorrt_start);
         
         // 获取输出
         void* output_buffer = const_cast<void*>(inference->context->getTensorAddress(kOutputTensorName));
@@ -184,6 +200,8 @@ bool yolo_inference_from_memory_fast(YoloInferenceHandle handle,
         const int kOutputSize = kMaxNumOutputBbox * sizeof(Detection) / sizeof(float) + 1;
         const int kOutputSegSize = 32 * (kInputH / 4) * (kInputW / 4);
         
+        // 结果复制时间测量
+        auto copy_start = std::chrono::high_resolution_clock::now();
         CUDA_CHECK(cudaMemcpyAsync(inference->output_buffer_host, output_buffer, 
                                    kBatchSize * kOutputSize * sizeof(float), cudaMemcpyDeviceToHost,
                                    inference->stream));
@@ -192,19 +210,33 @@ bool yolo_inference_from_memory_fast(YoloInferenceHandle handle,
                                    cudaMemcpyDeviceToHost, inference->stream));
         
         CUDA_CHECK(cudaStreamSynchronize(inference->stream));
+        auto copy_end = std::chrono::high_resolution_clock::now();
+        auto copy_duration = std::chrono::duration_cast<std::chrono::microseconds>(copy_end - copy_start);
         
-        auto end_time = std::chrono::high_resolution_clock::now();
-        auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
-        
-        // 后处理
+        // 后处理时间测量
+        auto postprocess_start = std::chrono::high_resolution_clock::now();
         std::vector<std::vector<Detection>> res_batch;
         batch_nms(res_batch, inference->output_buffer_host, img_batch.size(), kOutputSize, kConfThresh, kNmsThresh);
+        auto postprocess_end = std::chrono::high_resolution_clock::now();
+        auto postprocess_duration = std::chrono::duration_cast<std::chrono::microseconds>(postprocess_end - postprocess_start);
 
         auto& res = res_batch[0];
 
+        auto total_end_time = std::chrono::high_resolution_clock::now();
+        auto total_duration = std::chrono::duration_cast<std::chrono::microseconds>(total_end_time - total_start_time);
+
         // 填充结果
         result->num_detections = res.size();
-        result->inference_time_ms = duration.count() / 1000.0;
+        result->inference_time_ms = total_duration.count() / 1000.0;
+        
+        // 填充详细时间
+        result->image_read_time_ms = 0.0; // 从内存读取，时间为0
+        result->preprocess_time_ms = preprocess_duration.count() / 1000.0;
+        result->tensorrt_time_ms = tensorrt_duration.count() / 1000.0;
+        result->postprocess_time_ms = postprocess_duration.count() / 1000.0;
+        result->result_copy_time_ms = copy_duration.count() / 1000.0;
+        
+
 
         if (result->num_detections > 0) {
             result->detections = new YoloDetection[result->num_detections];
@@ -413,4 +445,95 @@ static std::vector<cv::Mat> process_mask(const float* proto, int proto_size, std
         masks.push_back(mask_mat);
     }
     return masks;
+}
+
+// 新增API函数实现
+bool yolo_tensorrt_inference_only(YoloInferenceHandle handle,
+                                  void* input_buffer,
+                                  void* output_buffer,
+                                  void* output_seg_buffer,
+                                  void* stream) {
+    if (!handle || !input_buffer || !output_buffer || !output_seg_buffer) {
+        set_error("Invalid parameters");
+        return false;
+    }
+    
+    try {
+        auto* inference = static_cast<YoloInference*>(handle);
+        cudaStream_t cuda_stream = static_cast<cudaStream_t>(stream);
+        
+        // 设置TensorRT缓冲区地址
+        inference->context->setTensorAddress(kInputTensorName, input_buffer);
+        inference->context->setTensorAddress(kOutputTensorName, output_buffer);
+        inference->context->setTensorAddress(kProtoTensorName, output_seg_buffer);
+        
+        // 执行TensorRT推理
+        inference->context->enqueueV3(cuda_stream);
+        
+        return true;
+    } catch (const std::exception& e) {
+        set_error("Exception in yolo_tensorrt_inference_only: " + std::string(e.what()));
+        return false;
+    }
+}
+
+bool yolo_get_tensorrt_info(YoloInferenceHandle handle,
+                            int* input_size,
+                            int* output_size,
+                            int* output_seg_size) {
+    if (!handle || !input_size || !output_size || !output_seg_size) {
+        set_error("Invalid parameters");
+        return false;
+    }
+    
+    try {
+        auto* inference = static_cast<YoloInference*>(handle);
+        
+        *input_size = kBatchSize * kInputH * kInputW * 3; // RGB
+        *output_size = kMaxNumOutputBbox * sizeof(Detection) / sizeof(float) + 1;
+        *output_seg_size = 32 * (kInputH / 4) * (kInputW / 4);
+        
+        return true;
+    } catch (const std::exception& e) {
+        set_error("Exception in yolo_get_tensorrt_info: " + std::string(e.what()));
+        return false;
+    }
+}
+
+bool yolo_get_tensorrt_buffers(YoloInferenceHandle handle,
+                               void** input_buffer,
+                               void** output_buffer,
+                               void** output_seg_buffer) {
+    if (!handle || !input_buffer || !output_buffer || !output_seg_buffer) {
+        set_error("Invalid parameters");
+        return false;
+    }
+    
+    try {
+        auto* inference = static_cast<YoloInference*>(handle);
+        
+        *input_buffer = inference->device_buffers[0];
+        *output_buffer = inference->device_buffers[1];
+        *output_seg_buffer = inference->device_buffers[2];
+        
+        return true;
+    } catch (const std::exception& e) {
+        set_error("Exception in yolo_get_tensorrt_buffers: " + std::string(e.what()));
+        return false;
+    }
+}
+
+void* yolo_get_cuda_stream(YoloInferenceHandle handle) {
+    if (!handle) {
+        set_error("Invalid handle");
+        return nullptr;
+    }
+    
+    try {
+        auto* inference = static_cast<YoloInference*>(handle);
+        return static_cast<void*>(inference->stream);
+    } catch (const std::exception& e) {
+        set_error("Exception in yolo_get_cuda_stream: " + std::string(e.what()));
+        return nullptr;
+    }
 }

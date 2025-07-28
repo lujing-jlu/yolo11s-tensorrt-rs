@@ -25,3 +25,11 @@ crate-type = ["cdylib", "rlib"]
 [[example]]
 name = "basic_usage"
 path = "examples/basic_usage.rs"
+
+[[example]]
+name = "detailed_timing"
+path = "examples/detailed_timing.rs"
+
+[[example]]
+name = "simple_test"
+path = "examples/simple_test.rs"

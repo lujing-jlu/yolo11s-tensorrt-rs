@@ -23,6 +23,13 @@ typedef struct {
     YoloDetection* detections;  // 检测结果数组
     int num_detections;         // 检测数量
     double inference_time_ms;   // 推理时间(毫秒)
+    
+    // 详细时间分解
+    double image_read_time_ms;      // 图片读取时间
+    double preprocess_time_ms;      // 预处理时间
+    double tensorrt_time_ms;        // TensorRT推理时间
+    double postprocess_time_ms;     // 后处理时间
+    double result_copy_time_ms;     // 结果复制时间
 } YoloResult;
 
 // YOLO推理器句柄
@@ -116,6 +123,54 @@ void yolo_free_result(YoloResult* result);
  * @return 最后一次错误的描述字符串
  */
 const char* yolo_get_last_error(void);
+
+/**
+ * 执行推理（纯TensorRT推理，无预处理和后处理）
+ * @param handle 推理器句柄
+ * @param input_buffer GPU输入缓冲区指针
+ * @param output_buffer GPU输出缓冲区指针
+ * @param output_seg_buffer GPU分割输出缓冲区指针
+ * @param stream CUDA流
+ * @return 成功返回true，失败返回false
+ */
+bool yolo_tensorrt_inference_only(YoloInferenceHandle handle,
+                                  void* input_buffer,
+                                  void* output_buffer,
+                                  void* output_seg_buffer,
+                                  void* stream);
+
+/**
+ * 获取TensorRT推理器信息
+ * @param handle 推理器句柄
+ * @param input_size 输出输入大小
+ * @param output_size 输出检测输出大小
+ * @param output_seg_size 输出分割输出大小
+ * @return 成功返回true，失败返回false
+ */
+bool yolo_get_tensorrt_info(YoloInferenceHandle handle,
+                            int* input_size,
+                            int* output_size,
+                            int* output_seg_size);
+
+/**
+ * 获取TensorRT缓冲区地址
+ * @param handle 推理器句柄
+ * @param input_buffer 输出输入缓冲区地址
+ * @param output_buffer 输出检测输出缓冲区地址
+ * @param output_seg_buffer 输出分割输出缓冲区地址
+ * @return 成功返回true，失败返回false
+ */
+bool yolo_get_tensorrt_buffers(YoloInferenceHandle handle,
+                               void** input_buffer,
+                               void** output_buffer,
+                               void** output_seg_buffer);
+
+/**
+ * 获取CUDA流
+ * @param handle 推理器句柄
+ * @return CUDA流指针
+ */
+void* yolo_get_cuda_stream(YoloInferenceHandle handle);
 
 #ifdef __cplusplus
 }
