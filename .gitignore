@@ -13,18 +13,16 @@ tensorrt_core/build/
 *.so
 *.so.*
 
-# Test outputs
-output_result.jpg
-*.jpg
-*.png
+# Test outputs (but keep example images)
+output_*.jpg
+output_*.png
+result_*.jpg
+result_*.png
 
-# Models (large files)
-models/
-*.engine
-*.wts
-*.pt
-*.onnx
-*.trt
+# Large model files (but keep example models)
+# models/*.engine
+# models/*.wts
+# models/*.pt
 
 # OS
 .DS_Store
@@ -32,3 +30,11 @@ Thumbs.db
 
 # Logs
 *.log
+
+# Temporary files
+*.tmp
+*.temp
+*~
+
+# Performance analysis files
+PERFORMANCE_ANALYSIS.md
