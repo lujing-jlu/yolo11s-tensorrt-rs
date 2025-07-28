@@ -1,35 +1,38 @@
 [package]
 name = "yolo11s-tensorrt-rs"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
-authors = ["AI Assistant"]
-description = "Rust bindings for YOLO11s segmentation inference with TensorRT"
+authors = ["Your Name <your.email@example.com>"]
+description = "高性能的 YOLO11s 分割模型 Rust 绑定，基于 TensorRT 和 CUDA 加速"
 license = "MIT"
-repository = "https://github.com/your-username/yolo11s-tensorrt-rs"
-keywords = ["yolo", "tensorrt", "inference", "segmentation", "rust", "cuda"]
-categories = ["api-bindings", "multimedia::images"]
+repository = "https://github.com/lujing-jlu/yolo11s-tensorrt-rs"
+keywords = ["yolo", "tensorrt", "cuda", "object-detection", "segmentation", "deep-learning"]
+categories = ["api-bindings", "science", "multimedia"]
+readme = "README.md"
+documentation = "https://docs.rs/yolo11s-tensorrt-rs"
 
 [dependencies]
-image = "0.25"
-imageproc = "0.24"
-ndarray = "0.15"
-rayon = "1.8"
+image = "0.24"
 
 [build-dependencies]
 cc = "1.0"
 
+[dev-dependencies]
+criterion = "0.5"
+
 [lib]
 name = "yolo11s_tensorrt_rs"
-crate-type = ["cdylib", "rlib"]
+path = "src/lib.rs"
 
-[[example]]
-name = "basic_usage"
-path = "examples/basic_usage.rs"
+[[bin]]
+name = "test"
+path = "src/bin/test.rs"
 
-[[example]]
-name = "detailed_timing"
-path = "examples/detailed_timing.rs"
-
-[[example]]
-name = "simple_test"
-path = "examples/simple_test.rs"
+[features]
+default = []
+# 启用详细日志
+verbose = []
+# 启用性能分析
+profiling = []
+# 启用 CUDA 内存管理
+cuda_memory = []
