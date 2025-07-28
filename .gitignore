@@ -18,6 +18,14 @@ output_result.jpg
 *.jpg
 *.png
 
+# Models (large files)
+models/
+*.engine
+*.wts
+*.pt
+*.onnx
+*.trt
+
 # OS
 .DS_Store
 Thumbs.db
